@@ -8,6 +8,7 @@
 ║  Copyright : (c) 2026 MAINUL - X        ║
 ╚══════════════════════════════════════════╝
 """
+import time
 import threading
 import http.server
 import socketserver
@@ -33,13 +34,51 @@ from handlers.platforms.youtube   import yt_command
 from handlers.platforms.facebook  import fb_command
 from handlers.platforms.instagram import ig_command
 from handlers.platforms.tiktok    import tt_command
-
+start_time = time.time()
 def run_server():
+    class CustomHandler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self):
+            
+            uptime_seconds = int(time.time() - start_time)
+            days, rem = divmod(uptime_seconds, 86400)
+            hours, rem = divmod(rem, 3600)
+            minutes, seconds = divmod(rem, 60)
+            
+            uptime_string = f"{days}d {hours}h {minutes}m {seconds}s"
+
+            self.send_response(200)
+            self.send_header("Content-type", "text/html; charset=utf-8")
+            self.end_headers()
+            
+            html = f"""
+            <html>
+            <head>
+                <title>Downloader X Bot Status</title>
+                <meta name="viewport" content="width=device-width, initial-scale=1">
+            </head>
+            <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; text-align: center; padding-top: 100px; background-color: #0e1621; color: white;">
+                <div style="border: 2px solid #0088cc; display: inline-block; padding: 30px; border-radius: 15px; background: #17212b; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+                    <h1 style="color: #40a7e3; margin-bottom: 10px;">🚀 Downloader X Bot</h1>
+                    <p style="font-size: 1.1em; color: #abbecf;">The bot is currently <b>Online</b></p>
+                    
+                    <div style="background: #242f3d; padding: 10px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #40a7e3;">
+                        <span style="color: #8295a5;">Uptime:</span> <span style="color: #fff; font-family: monospace;">{uptime_string}</span>
+                    </div>
+
+                    <div style="margin: 20px 0; font-weight: bold; color: #fff;">
+                        Developed by: <span style="color: #40a7e3;">MAINUL - X</span>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid #2b3948;">
+                    <p style="font-size: 0.9em; color: #8295a5;">(c) 2026 MAINUL - X | All Rights Reserved</p>
+                    <a href="https://t.me/mdmainulislaminfo" style="display: inline-block; margin-top: 15px; padding: 10px 20px; background-color: #0088cc; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Contact Developer</a>
+                </div>
+            </body>
+            </html>
+            """
+            self.wfile.write(html.encode("utf-8"))
+
     PORT = int(os.environ.get("PORT", 8080))
-    Handler = http.server.SimpleHTTPRequestHandler
-    
-    with socketserver.TCPServer(("", PORT), Handler) as httpd:
-        print(f"🌐 Serving at port {PORT}")
+    with socketserver.TCPServer(("", PORT), CustomHandler) as httpd:
         httpd.serve_forever()
 
 threading.Thread(target=run_server, daemon=True).start()
