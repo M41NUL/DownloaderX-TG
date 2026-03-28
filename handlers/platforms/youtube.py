@@ -22,51 +22,52 @@ TMP_DIR = "downloads"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# /yt command
-# ─────────────────────────────────────────────────────────────────────────────
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Set waiting state then ask user for the link."""
     context.user_data[WAITING_KEY] = "youtube"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
     await update.message.reply_text(
         "▶️ *YouTube Downloader*\n\n"
-        "Please send me the YouTube video link:",
+        "Please send me the YouTube video or Shorts link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Core downloader (called by downloads.py → process_download)
-# ─────────────────────────────────────────────────────────────────────────────
 async def download_youtube(url: str) -> dict:
-    """
-    Downloads a YouTube video using yt-dlp.
-    Returns dict: {file_path, title, duration, size}
-    """
-    uid       = uuid.uuid4().hex
-    out_tmpl  = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
+    uid      = uuid.uuid4().hex
+    out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
     ydl_opts = {
-        "outtmpl":         out_tmpl,
-        "format":          "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "outtmpl":             out_tmpl,
+        "format":              "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best",
         "merge_output_format": "mp4",
-        "quiet":           True,
-        "no_warnings":     True,
-        "noplaylist":      True,
+        "quiet":               True,
+        "no_warnings":         True,
+        "noplaylist":          True,
+        # Bypass bot detection
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["ios", "web"],
+            }
+        },
+        "http_headers": {
+            "User-Agent": (
+                "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)"
+            ),
+        },
+        # Avoid 403 errors
+        "sleep_interval":      1,
+        "max_sleep_interval":  3,
     }
 
     loop = asyncio.get_event_loop()
 
     def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            return info
+            return ydl.extract_info(url, download=True)
 
     info = await loop.run_in_executor(None, _run)
 
-    # Resolve actual file path
     file_path = None
     for f in os.listdir(TMP_DIR):
         if f.startswith(f"yt_{uid}"):
@@ -76,22 +77,15 @@ async def download_youtube(url: str) -> dict:
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError("Downloaded file not found.")
 
-    # Duration formatting
     raw_dur  = info.get("duration", 0)
-    minutes  = int(raw_dur) // 60
-    seconds  = int(raw_dur) % 60
-    duration = f"{minutes}:{seconds:02d}"
-
-    # Size formatting
-    raw_size = os.path.getsize(file_path)
-    size_mb  = raw_size / (1024 * 1024)
-    size_str = f"{size_mb:.1f} MB"
+    duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
+    size_mb  = os.path.getsize(file_path) / (1024 * 1024)
 
     increment_stat("youtube")
 
     return {
         "file_path": file_path,
-        "title":     info.get("title", "Unknown"),
+        "title":     info.get("title", "YouTube Video"),
         "duration":  duration,
-        "size":      size_str,
+        "size":      f"{size_mb:.1f} MB",
     }
