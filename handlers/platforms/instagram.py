@@ -1,8 +1,8 @@
 """
 ╔══════════════════════════════════════════╗
-║    DOWNLOADER X — INSTAGRAM PLATFORM     ║
-║  /ig command + yt-dlp downloader         ║
-║  Videos, Reels, Posts — all supported    ║
+║      DOWNLOADER X — TIKTOK PLATFORM      ║
+║  /tt command + yt-dlp downloader         ║
+║  Videos, Photos, Slideshows supported    ║
 ║  Author    : Md. Mainul Islam            ║
 ║  Copyright : (c) 2026 MAINUL - X        ║
 ╚══════════════════════════════════════════╝
@@ -17,54 +17,55 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from handlers.admin import increment_stat
 
-logger = logging.getLogger("DownloaderX.instagram")
+logger = logging.getLogger("DownloaderX.tiktok")
 WAITING_KEY = "waiting_platform"
 TMP_DIR = "downloads"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
-async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    context.user_data[WAITING_KEY] = "instagram"
+async def tt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    context.user_data[WAITING_KEY] = "tiktok"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
     await update.message.reply_text(
-        "📸 *Instagram Downloader*\n\n"
-        "Supported: Videos, Reels, Posts\n\n"
-        "Please send me the Instagram link:",
+        "🎵 *TikTok Downloader*\n\n"
+        "Supported: Videos, Photos, Slideshows\n\n"
+        "Please send me the TikTok link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
-async def download_instagram(url: str) -> dict:
+async def download_tiktok(url: str) -> dict:
     uid      = uuid.uuid4().hex
-    out_tmpl = os.path.join(TMP_DIR, f"ig_{uid}.%(ext)s")
+    out_tmpl = os.path.join(TMP_DIR, f"tt_{uid}.%(ext)s")
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo[ext=mp4][filesize<45M]+bestaudio/best[ext=mp4][filesize<45M]/best",
+        # No-watermark format preference
+        "format":              "bestvideo[vcodec!=h265][filesize<45M]+bestaudio/best[filesize<45M]/best",
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
-        # Instagram needs specific headers to avoid 403
         "http_headers": {
             "User-Agent": (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                "Version/17.0 Mobile/15E148 Safari/604.1"
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
             ),
-            "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "DNT":             "1",
-            "Connection":      "keep-alive",
+            "Referer":         "https://www.tiktok.com/",
+            "Accept-Language": "en-US,en;q=0.9",
         },
-        # Some Instagram videos need this
         "extractor_args": {
-            "instagram": {
-                "include_feeds": ["reels", "posts"],
+            "tiktok": {
+                "webpage_download": True,
             }
         },
+        # TikTok slideshow/photo posts → convert to video
+        "postprocessors": [{
+            "key": "FFmpegVideoConvertor",
+            "preferedformat": "mp4",
+        }],
     }
 
     loop = asyncio.get_event_loop()
@@ -73,11 +74,24 @@ async def download_instagram(url: str) -> dict:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.extract_info(url, download=True)
 
-    info = await loop.run_in_executor(None, _run)
+    try:
+        info = await loop.run_in_executor(None, _run)
+    except Exception as e:
+        # Fallback: simpler options
+        ydl_opts_fallback = {
+            "outtmpl":  out_tmpl,
+            "format":   "best",
+            "quiet":    True,
+            "no_warnings": True,
+        }
+        def _run_fallback():
+            with yt_dlp.YoutubeDL(ydl_opts_fallback) as ydl:
+                return ydl.extract_info(url, download=True)
+        info = await loop.run_in_executor(None, _run_fallback)
 
     file_path = None
     for f in os.listdir(TMP_DIR):
-        if f.startswith(f"ig_{uid}"):
+        if f.startswith(f"tt_{uid}"):
             file_path = os.path.join(TMP_DIR, f)
             break
 
@@ -88,11 +102,11 @@ async def download_instagram(url: str) -> dict:
     duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
 
-    increment_stat("instagram")
+    increment_stat("tiktok")
 
     return {
         "file_path": file_path,
-        "title":     info.get("title", "Instagram Video"),
+        "title":     info.get("title", "TikTok Video"),
         "duration":  duration,
         "size":      f"{size_mb:.1f} MB",
     }
