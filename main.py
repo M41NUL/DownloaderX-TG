@@ -8,7 +8,10 @@
 ║  Copyright : (c) 2026 MAINUL - X        ║
 ╚══════════════════════════════════════════╝
 """
-
+import threading
+import http.server
+import socketserver
+import os
 import logging
 import asyncio
 from telegram.ext import (
@@ -30,6 +33,16 @@ from handlers.platforms.youtube   import yt_command
 from handlers.platforms.facebook  import fb_command
 from handlers.platforms.instagram import ig_command
 from handlers.platforms.tiktok    import tt_command
+
+def run_server():
+    PORT = int(os.environ.get("PORT", 8080))
+    Handler = http.server.SimpleHTTPRequestHandler
+    
+    with socketserver.TCPServer(("", PORT), Handler) as httpd:
+        print(f"🌐 Serving at port {PORT}")
+        httpd.serve_forever()
+
+threading.Thread(target=run_server, daemon=True).start()
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 logging.basicConfig(
