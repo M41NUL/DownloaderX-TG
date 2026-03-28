@@ -99,11 +99,12 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
     keyboard = [[InlineKeyboardButton("🏠 Back to Home", callback_data="dl_home")]]
-    await update.message.reply_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
+    await update.effective_message.reply_text(
+    text,
+    parse_mode="Markdown",
+    reply_markup=InlineKeyboardMarkup(keyboard),
+)
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -133,9 +134,8 @@ async def handle_dev(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
         [InlineKeyboardButton("🏠 Back to Home", callback_data="dl_home")],
     ]
 
-    await update.message.reply_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        disable_web_page_preview=True,
-    )
+    await update.effective_message.reply_text(
+    text,
+    parse_mode="Markdown",
+    reply_markup=InlineKeyboardMarkup(keyboard),
+)
