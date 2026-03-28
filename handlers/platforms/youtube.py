@@ -19,6 +19,7 @@ from handlers.admin import increment_stat
 logger = logging.getLogger("DownloaderX.youtube")
 WAITING_KEY = "waiting_platform"
 TMP_DIR = "downloads"
+COOKIES = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
@@ -44,6 +45,7 @@ async def download_youtube(url: str) -> dict:
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
+        "cookiefile":          COOKIES,
         # Bypass bot detection
         "extractor_args": {
             "youtube": {
