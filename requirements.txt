@@ -1,3 +1,6 @@
 python-telegram-bot==20.7
 yt-dlp
 python-dotenv
+httpx
+aiohttp
+ffmpeg-python
