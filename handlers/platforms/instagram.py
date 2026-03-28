@@ -20,6 +20,7 @@ from handlers.admin import increment_stat
 logger = logging.getLogger("DownloaderX.instagram")
 WAITING_KEY = "waiting_platform"
 TMP_DIR = "downloads"
+COOKIES = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
@@ -46,6 +47,7 @@ async def download_instagram(url: str) -> dict:
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
+        "cookiefile":          COOKIES,
         # Instagram needs specific headers to avoid 403
         "http_headers": {
             "User-Agent": (
