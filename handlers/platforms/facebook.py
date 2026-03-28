@@ -2,6 +2,7 @@
 ╔══════════════════════════════════════════╗
 ║     DOWNLOADER X — FACEBOOK PLATFORM     ║
 ║  /fb command + yt-dlp downloader         ║
+║  Videos, Reels, Watch — all supported    ║
 ║  Author    : Md. Mainul Islam            ║
 ║  Copyright : (c) 2026 MAINUL - X        ║
 ╚══════════════════════════════════════════╝
@@ -22,34 +23,37 @@ TMP_DIR = "downloads"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# /fb command
-# ─────────────────────────────────────────────────────────────────────────────
 async def fb_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data[WAITING_KEY] = "facebook"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
     await update.message.reply_text(
         "📘 *Facebook Downloader*\n\n"
-        "Please send me the Facebook video link:",
+        "Supported: Videos, Reels, Watch\n\n"
+        "Please send me the Facebook link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Core downloader
-# ─────────────────────────────────────────────────────────────────────────────
 async def download_facebook(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"fb_{uid}.%(ext)s")
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo[ext=mp4]+bestaudio/best[ext=mp4]/best",
+        "format":              "bestvideo[ext=mp4][filesize<45M]+bestaudio/best[ext=mp4][filesize<45M]/best",
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
+        "http_headers": {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/122.0.0.0 Safari/537.36"
+            ),
+            "Accept-Language": "en-US,en;q=0.9",
+        },
     }
 
     loop = asyncio.get_event_loop()
@@ -70,12 +74,8 @@ async def download_facebook(url: str) -> dict:
         raise FileNotFoundError("Downloaded file not found.")
 
     raw_dur  = info.get("duration", 0)
-    minutes  = int(raw_dur) // 60
-    seconds  = int(raw_dur) % 60
-    duration = f"{minutes}:{seconds:02d}"
-
+    duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
-    size_str = f"{size_mb:.1f} MB"
 
     increment_stat("facebook")
 
@@ -83,5 +83,5 @@ async def download_facebook(url: str) -> dict:
         "file_path": file_path,
         "title":     info.get("title", "Facebook Video"),
         "duration":  duration,
-        "size":      size_str,
+        "size":      f"{size_mb:.1f} MB",
     }
