@@ -1,9 +1,9 @@
 """
 ╔══════════════════════════════════════════╗
-║       DOWNLOADER X — ADMIN PANEL         ║
-║  /admin command + inline admin buttons   ║
-║  Author    : Md. Mainul Islam            ║
-║  Copyright : (c) 2026 MAINUL - X        ║
+║       DOWNLOADER X — ADMIN PANEL       		   ║
+║  /admin command + inline admin buttons    	   ║
+║  Author    : Md. Mainul Islam            		   ║
+║  Copyright : (c) 2026 MAINUL - X    		       ║
 ╚══════════════════════════════════════════╝
 """
 
