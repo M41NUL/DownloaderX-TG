@@ -149,9 +149,11 @@ async def process_download(
         pass
 
     # ── Step 4 : Send video + final caption ───────────────────────────────────
+    title = result.get('title', 'N/A')
     caption = (
         f"✅ *Download Complete!*\n\n"
-        f"🎬 *Title     :* {result.get('title', 'N/A')}\n"
+        f"🎬 *Title* \n"
+        f"`{title}`\n"
         f"⏱️ *Duration  :* {result.get('duration', 'N/A')}\n"
         f"📦 *Size      :* {result.get('size', 'N/A')}\n"
         f"📡 *Platform  :* {platform_label}\n\n"
