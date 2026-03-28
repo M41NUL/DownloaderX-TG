@@ -14,6 +14,7 @@ from config import (
     BOT_NAME, AUTHOR, OWNER_NAME, GITHUB_URL,
     TELEGRAM, WHATSAPP, EMAIL, COPYRIGHT,
 )
+from handlers.admin import register_user, notify_new_user, is_maintenance, is_banned
 
 logger = logging.getLogger("DownloaderX.logic")
 
@@ -31,6 +32,23 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """
     user = update.effective_user
     first = user.first_name or "there"
+
+    register_user(user)
+    await notify_new_user(context, user)
+
+    if is_banned(user.id):
+        await update.message.reply_text(
+            "🚫 *You have been banned from using this bot.*",
+            parse_mode="Markdown",
+        )
+        return
+
+    if is_maintenance():
+        await update.message.reply_text(
+            "🔧 *Bot is under maintenance.*\n\nPlease try again later.",
+            parse_mode="Markdown",
+        )
+        return
 
     text = (
         f"👋 *Welcome, {first}!*\n\n"
@@ -70,6 +88,9 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 # /help
 # ─────────────────────────────────────────────────────────────────────────────
 async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if is_banned(update.effective_user.id):
+        return
+
     text = (
         "📖 *Downloader X — Help Guide*\n\n"
         "━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -100,11 +121,10 @@ async def handle_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
     keyboard = [[InlineKeyboardButton("🏠 Back to Home", callback_data="dl_home")]]
     await update.effective_message.reply_text(
-    text,
-    parse_mode="Markdown",
-    reply_markup=InlineKeyboardMarkup(keyboard),
-)
-
+        text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -135,7 +155,7 @@ async def handle_dev(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     ]
 
     await update.effective_message.reply_text(
-    text,
-    parse_mode="Markdown",
-    reply_markup=InlineKeyboardMarkup(keyboard),
-)
+        text,
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
