@@ -10,6 +10,7 @@
 """
 
 import logging
+import asyncio
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -38,7 +39,7 @@ logging.basicConfig(
 logger = logging.getLogger("DownloaderX.main")
 
 
-def main() -> None:
+async def main() -> None:
     app = (
         Application.builder()
         .token(BOT_TOKEN)
@@ -66,8 +67,17 @@ def main() -> None:
     )
 
     logger.info("✅ Downloader X is running...")
-    app.run_polling(allowed_updates=["message", "callback_query"], drop_pending_updates=True)
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling(
+        allowed_updates=["message", "callback_query"],
+        drop_pending_updates=True,
+    )
+
+    # Run forever
+    await asyncio.Event().wait()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
