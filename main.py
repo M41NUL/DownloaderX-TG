@@ -26,7 +26,7 @@ from config import BOT_TOKEN
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
 from handlers.logic       import handle_start, handle_help, handle_dev
-from handlers.admin       import handle_admin, admin_callback
+from handlers.admin       import handle_admin, admin_callback, admin_message_handler
 from handlers.auto_detect import auto_detect_handler
 from handlers.downloads   import download_callback
 
@@ -113,13 +113,16 @@ async def main() -> None:
     app.add_handler(CallbackQueryHandler(admin_callback,    pattern="^admin_"))
 
     # ── Auto-Detect: plain text messages (URLs) ───────────────────────────────
+    async def smart_message_handler(update, context):
+        handled = await admin_message_handler(update, context)
+        if not handled:
+            await auto_detect_handler(update, context)
+
     app.add_handler(
-        MessageHandler(filters.TEXT & ~filters.COMMAND, auto_detect_handler),
+        MessageHandler(filters.TEXT & ~filters.COMMAND, smart_message_handler),
         group=1,
     )
-
     logger.info("✅ Downloader X is running...")
-
     await app.initialize()
     await app.start()
     await app.updater.start_polling(
