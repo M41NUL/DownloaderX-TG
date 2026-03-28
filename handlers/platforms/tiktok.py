@@ -20,6 +20,7 @@ from handlers.admin import increment_stat
 logger = logging.getLogger("DownloaderX.tiktok")
 WAITING_KEY = "waiting_platform"
 TMP_DIR = "downloads"
+COOKIES = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
@@ -47,6 +48,7 @@ async def download_tiktok(url: str) -> dict:
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
+        "cookiefile":          COOKIES,
         "http_headers": {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
