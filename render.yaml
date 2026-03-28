@@ -1,0 +1,13 @@
+services:
+  - type: worker
+    name: downloader-x-bot
+    runtime: python
+    plan: free
+    buildCommand: chmod +x build.sh && ./build.sh
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+    autoDeploy: true
