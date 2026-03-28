@@ -39,7 +39,11 @@ logger = logging.getLogger("DownloaderX.main")
 
 
 def main() -> None:
-    app = Application.builder().token(BOT_TOKEN).build()
+    app = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
 
     # ── Commands ──────────────────────────────────────────────────────────────
     app.add_handler(CommandHandler("start",  handle_start))
@@ -56,14 +60,13 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(admin_callback,    pattern="^admin_"))
 
     # ── Auto-Detect: plain text messages (URLs) ───────────────────────────────
-    # group=1 → runs AFTER command handlers (group=0)
     app.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, auto_detect_handler),
         group=1,
     )
 
     logger.info("✅ Downloader X is running...")
-    app.run_polling(drop_pending_updates=True)
+    app.run_polling(allowed_updates=["message", "callback_query"], drop_pending_updates=True)
 
 
 if __name__ == "__main__":
