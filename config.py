@@ -10,6 +10,7 @@
 """
 
 import os
+from datetime import datetime
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,7 +28,7 @@ WHATSAPP    = "+8801308850528"
 TELEGRAM    = "@mdmainulislaminfo"
 EMAIL       = "githubmainul@gmail.com | devmainulislam@gmail.com"
 LICENSE     = "MIT License"
-COPYRIGHT   = "Copyright (c) 2026 MAINUL - X"
+COPYRIGHT   = f"Copyright (c) {datetime.now().year} MAINUL - X"
 BOT_NAME    = "Downloader X"
 
 # ── Supported Platforms ───────────────────────────────────────────────────────
