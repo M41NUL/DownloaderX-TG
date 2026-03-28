@@ -40,7 +40,7 @@ async def download_youtube(url: str) -> dict:
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo[ext=mp4][filesize<45M]+bestaudio[ext=m4a]/best[ext=mp4][filesize<45M]/best",
+        "format":              "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
