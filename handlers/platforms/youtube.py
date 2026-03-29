@@ -14,24 +14,30 @@ import uuid
 import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from handlers.admin import increment_stat
+from handlers.admin import increment_stat, is_maintenance
+from config import MAINTENANCE_TEXT
 
 logger = logging.getLogger("DownloaderX.youtube")
 WAITING_KEY = "waiting_platform"
-TMP_DIR = "downloads"
-COOKIES = "cookies.txt"
+TMP_DIR     = "downloads"
+COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if is_maintenance():
+        await update.message.reply_text(MAINTENANCE_TEXT, parse_mode="Markdown")
+        return
     context.user_data[WAITING_KEY] = "youtube"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
-    await update.message.reply_text(
+    sent = await update.message.reply_text(
         "▶️ *YouTube Downloader*\n\n"
         "Please send me the YouTube video or Shorts link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
+    context.user_data["waiting_msg_id"]  = sent.message_id
+    context.user_data["waiting_chat_id"] = sent.chat.id
 
 
 async def download_youtube(url: str) -> dict:
@@ -40,7 +46,7 @@ async def download_youtube(url: str) -> dict:
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo+bestaudio/best",
+        "format":              "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
