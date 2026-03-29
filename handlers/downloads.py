@@ -10,7 +10,7 @@
 import asyncio
 import os
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import ContextTypes
 from config import BOT_NAME, GITHUB_URL, VIDEO_DELETE_DELAY, PROCESSING_EDIT_DELAY
 from handlers.platforms.youtube   import download_youtube
@@ -21,21 +21,6 @@ from handlers.platforms.tiktok    import download_tiktok
 logger = logging.getLogger("DownloaderX.downloads")
 
 WAITING_KEY = "waiting_platform"
-
-# ── Progress bar frames ───────────────────────────────────────────────────────
-PROGRESS_FRAMES = [
-    "⬜⬜⬜⬜⬜⬜⬜⬜⬜⬜  0%",
-    "🟩⬜⬜⬜⬜⬜⬜⬜⬜⬜ 10%",
-    "🟩🟩⬜⬜⬜⬜⬜⬜⬜⬜ 20%",
-    "🟩🟩🟩⬜⬜⬜⬜⬜⬜⬜ 30%",
-    "🟩🟩🟩🟩⬜⬜⬜⬜⬜⬜ 40%",
-    "🟩🟩🟩🟩🟩⬜⬜⬜⬜⬜ 50%",
-    "🟩🟩🟩🟩🟩🟩⬜⬜⬜⬜ 60%",
-    "🟩🟩🟩🟩🟩🟩🟩⬜⬜⬜ 70%",
-    "🟩🟩🟩🟩🟩🟩🟩🟩⬜⬜ 80%",
-    "🟩🟩🟩🟩🟩🟩🟩🟩🟩⬜ 90%",
-    "🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩 100% ✅",
-]
 
 PLATFORM_EMOJI = {
     "youtube":   "▶️ YouTube",
@@ -51,24 +36,22 @@ DOWNLOADER_MAP = {
     "tiktok":    download_tiktok,
 }
 
+# ── Spinner frames (download চলাকালীন) ───────────────────────────────────────
+SPINNER_FRAMES = ["⏳", "⌛", "⏳", "⌛"]
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Inline button callback  (dl_platform_youtube / dl_platform_facebook / etc.)
-# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Inline button callback ────────────────────────────────────────────────────
 async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    data = query.data
 
-    data = query.data  # e.g. "dl_platform_youtube"
-
-    # ── Home button ───────────────────────────────────────────────────────────
     if data == "dl_home":
         from handlers.logic import handle_start
         await query.message.delete()
         await handle_start(update, context)
         return
 
-    # ── Platform button ───────────────────────────────────────────────────────
     if data.startswith("dl_platform_"):
         platform = data.replace("dl_platform_", "")
         context.user_data[WAITING_KEY] = platform
@@ -84,68 +67,76 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         return
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Core download function called by auto_detect + platform commands
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Core download ─────────────────────────────────────────────────────────────
 async def process_download(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     platform: str,
     url: str,
 ) -> None:
-    """
-    1. Send animated processing bar (single message, edited in-place).
-    2. Run the platform-specific downloader.
-    3. Delete the processing message.
-    4. Send the video with a rich caption.
-    """
     chat_id        = update.effective_chat.id
     platform_label = PLATFORM_EMOJI.get(platform, platform.title())
 
-    # ── Step 1 : Send processing bar ─────────────────────────────────────────
+    # ── Step 1: Processing message পাঠাও ─────────────────────────────────────
     proc_msg = await context.bot.send_message(
         chat_id=chat_id,
-        text=f"📥 *Downloading from {platform_label}*\n\n{PROGRESS_FRAMES[0]}",
+        text=(
+            f"📥 *Downloading from {platform_label}*\n\n"
+            f"⏳ Please wait..."
+        ),
         parse_mode="Markdown",
     )
 
-    # Animate progress bar
-    for frame in PROGRESS_FRAMES[1:]:
-        await asyncio.sleep(PROCESSING_EDIT_DELAY)
-        try:
-            await proc_msg.edit_text(
-                f"📥 *Downloading from {platform_label}*\n\n{frame}",
-                parse_mode="Markdown",
-            )
-        except Exception:
-            pass
-
-    # ── Step 2 : Call downloader ──────────────────────────────────────────────
+    # ── Step 2: Download + spinner একসাথে চালাও ──────────────────────────────
     downloader = DOWNLOADER_MAP.get(platform)
     if not downloader:
         await proc_msg.edit_text("❌ Unsupported platform.")
         return
 
+    # Download task
+    download_task = asyncio.create_task(downloader(url))
+
+    # Spinner task — download শেষ না হওয়া পর্যন্ত চলবে
+    async def _spinner():
+        i = 0
+        while not download_task.done():
+            frame = SPINNER_FRAMES[i % len(SPINNER_FRAMES)]
+            try:
+                await proc_msg.edit_text(
+                    f"📥 *Downloading from {platform_label}*\n\n"
+                    f"{frame} Please wait...",
+                    parse_mode="Markdown",
+                )
+            except Exception:
+                pass
+            await asyncio.sleep(PROCESSING_EDIT_DELAY)
+            i += 1
+
+    spinner_task = asyncio.create_task(_spinner())
+
+    # Download শেষ হওয়ার জন্য অপেক্ষা করো
     try:
-        result = await downloader(url)
+        result = await download_task
     except Exception as e:
+        spinner_task.cancel()
         logger.error(f"Download error [{platform}]: {e}")
         await proc_msg.edit_text(
             f"❌ *Download failed!*\n\n`{e}`",
             parse_mode="Markdown",
         )
         return
+    finally:
+        spinner_task.cancel()
 
-    # ── Step 3 : Delete processing message (after short delay) ───────────────
-    await asyncio.sleep(VIDEO_DELETE_DELAY)
+    # ── Step 3: Processing message delete করো ────────────────────────────────
     try:
         await proc_msg.delete()
     except Exception:
         pass
 
-    # ── Step 4 : Send video + final caption ───────────────────────────────────
-    title = result.get('title', 'N/A')
-    caption = (
+    # ── Step 4: Video পাঠাও ──────────────────────────────────────────────────
+    title     = result.get("title", "N/A")
+    caption   = (
         f"✅ *Download Complete!*\n\n"
         f"🎬 *Title*\n"
         f"`{title}`\n\n"
@@ -176,7 +167,6 @@ async def process_download(
             parse_mode="Markdown",
         )
     finally:
-        # Clean up temp file
         if file_path and os.path.exists(file_path):
             try:
                 os.remove(file_path)
