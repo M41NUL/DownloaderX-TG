@@ -25,6 +25,8 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from config import PLATFORMS, AUTO_DETECT_DELETE_DELAY
 from handlers.downloads import process_download
+from handlers.admin import is_maintenance
+from config import MAINTENANCE_TEXT
 
 logger = logging.getLogger("DownloaderX.auto_detect")
 
@@ -51,7 +53,7 @@ def _extract_url(text: str) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-async def auto_detect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def auto_detect_handler(update, context): ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles every plain-text message that isn't a command.
 
@@ -64,6 +66,9 @@ async def auto_detect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
     text = (update.message.text or "").strip()
     uid  = update.effective_user.id
 
+		if is_maintenance():
+        await update.message.reply_text(MAINTENANCE_TEXT, parse_mode="Markdown")
+        return
     waiting_platform: str | None = context.user_data.get(WAITING_KEY)
 
     # ── CASE A: button / command mode ─────────────────────────────────────────
