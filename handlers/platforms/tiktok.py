@@ -51,9 +51,19 @@ async def download_tiktok(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"tt_{uid}.%(ext)s")
 
+
+    fmt = (
+        "download_addr-0"          
+        "/play_addr-0"             
+        "/best[ext=mp4][acodec!=none]"  
+        "/best[acodec!=none]"      
+        "/best[ext=mp4]"           
+        "/best"
+    )
+
     ydl_opts = {
         "outtmpl":            out_tmpl,
-        "format":             "best[ext=mp4]/best",  # single file, ffmpeg লাগবে না
+        "format":             fmt,
         "quiet":              True,
         "no_warnings":        True,
         "noplaylist":         True,
@@ -80,6 +90,7 @@ async def download_tiktok(url: str) -> dict:
         err = str(e)
         logger.error(f"[TikTok] DownloadError: {err}")
         raise RuntimeError(f"❌ TikTok download failed!\n\n`{err[:200]}`")
+
 
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
