@@ -26,8 +26,6 @@ COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
-# ── /yt command ───────────────────────────────────────────────────────────────
-
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_maintenance():
         await update.message.reply_text(MAINTENANCE_TEXT, parse_mode="Markdown")
@@ -47,20 +45,11 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     context.user_data["waiting_chat_id"] = sent.chat.id
 
 
-# ── Core download ─────────────────────────────────────────────────────────────
-
 async def download_youtube(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
-    
-    fmt = (
-        "best[height<=720][ext=mp4]"
-        "/best[height<=480][ext=mp4]"
-        "/best[height<=360][ext=mp4]"
-        "/best[ext=mp4]"
-        "/best"
-    )
+    fmt = "best[ext=mp4]/best"
 
     ydl_opts = {
         "outtmpl":            out_tmpl,
@@ -73,7 +62,6 @@ async def download_youtube(url: str) -> dict:
         "ignoreerrors":       False,
         "retries":            10,
         "fragment_retries":   10,
-        
     }
 
     loop = asyncio.get_event_loop()
@@ -96,7 +84,6 @@ async def download_youtube(url: str) -> dict:
         else:
             raise RuntimeError(f"❌ Download failed!\n\n`{err[:200]}`")
 
-    
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
