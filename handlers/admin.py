@@ -1,9 +1,9 @@
 """
 ╔══════════════════════════════════════════╗
-║       DOWNLOADER X — ADMIN PANEL       		   ║
-║  /admin command + inline admin buttons    	   ║
-║  Author    : Md. Mainul Islam            		   ║
-║  Copyright : (c) 2026 MAINUL - X    		       ║
+║       DOWNLOADER X — ADMIN PANEL         ║
+║  /admin command + inline admin buttons   ║
+║  Author    : Md. Mainul Islam            ║
+║  Copyright : (c) 2026 MAINUL - X        ║
 ╚══════════════════════════════════════════╝
 """
 
@@ -296,13 +296,22 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
     elif data == "admin_maintenance":
-        _maintenance = not _maintenance
-        status = "🔴 ON" if _maintenance else "🟢 OFF"
-        _add_log(f"Maintenance mode: {status}")
-        await query.answer(f"Maintenance mode: {status}", show_alert=True)
-        await query.message.edit_text(
-            _panel_text(), parse_mode="Markdown", reply_markup=_admin_keyboard()
-        )
+        if not _maintenance:
+            context.user_data["admin_action"] = "maintenance_on"
+            await query.message.edit_text(
+                "🔧 *Maintenance Mode*\n\n"
+                "Please send the message to broadcast to all users\n"
+                "before turning on maintenance mode:",
+                parse_mode="Markdown",
+                reply_markup=_back_keyboard(),
+            )
+        else:
+            _maintenance = False
+            _add_log("Maintenance mode: OFF")
+            await query.answer("🟢 Maintenance mode: OFF", show_alert=True)
+            await query.message.edit_text(
+                _panel_text(), parse_mode="Markdown", reply_markup=_admin_keyboard()
+            )
 
     elif data == "admin_commands":
         text = (
@@ -343,9 +352,10 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         )
 
 
-# ── Admin message handler (ban/unban/broadcast) ───────────────────────────────
+# ── Admin message handler ─────────────────────────────────────────────────────
 async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """Returns True if message was handled as admin action."""
+    global _maintenance
     user   = update.effective_user
     action = context.user_data.get("admin_action")
 
@@ -388,6 +398,38 @@ async def admin_message_handler(update: Update, context: ContextTypes.DEFAULT_TY
                 )
         except ValueError:
             await update.message.reply_text("❌ Invalid User ID.", reply_markup=_back_keyboard())
+        return True
+
+    elif action == "maintenance_on":
+        context.user_data.pop("admin_action", None)
+        _maintenance = True
+        _add_log("Maintenance mode: ON")
+
+        success = failed = 0
+        status_msg = await update.message.reply_text(
+            f"📢 Broadcasting to `{len(_users)}` users...",
+            parse_mode="Markdown",
+        )
+        for uid in list(_users.keys()):
+            try:
+                await context.bot.send_message(
+                    chat_id=uid,
+                    text=text,
+                    parse_mode="Markdown",
+                )
+                success += 1
+            except Exception:
+                failed += 1
+
+        _add_log(f"Maintenance broadcast: {success} success, {failed} failed")
+        await status_msg.edit_text(
+            f"✅ *Maintenance Mode ON!*\n\n"
+            f"📢 Broadcast sent!\n"
+            f"✔️ Success : `{success}`\n"
+            f"❌ Failed  : `{failed}`",
+            parse_mode="Markdown",
+            reply_markup=_back_keyboard(),
+        )
         return True
 
     elif action == "broadcast":
