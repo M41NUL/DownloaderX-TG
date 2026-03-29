@@ -19,21 +19,23 @@ from handlers.admin import increment_stat
 
 logger = logging.getLogger("DownloaderX.instagram")
 WAITING_KEY = "waiting_platform"
-TMP_DIR = "downloads"
-COOKIES = "cookies.txt"
+TMP_DIR     = "downloads"
+COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
 async def ig_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data[WAITING_KEY] = "instagram"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
-    await update.message.reply_text(
+    sent = await update.message.reply_text(
         "📸 *Instagram Downloader*\n\n"
         "Supported: Videos, Reels, Posts\n\n"
         "Please send me the Instagram link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
+    context.user_data["waiting_msg_id"]  = sent.message_id
+    context.user_data["waiting_chat_id"] = sent.chat.id
 
 
 async def download_instagram(url: str) -> dict:
@@ -48,24 +50,9 @@ async def download_instagram(url: str) -> dict:
         "no_warnings":         True,
         "noplaylist":          True,
         "cookiefile":          COOKIES,
-        # Instagram needs specific headers to avoid 403
         "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
-                "AppleWebKit/605.1.15 (KHTML, like Gecko) "
-                "Version/17.0 Mobile/15E148 Safari/604.1"
-            ),
-            "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate, br",
-            "DNT":             "1",
-            "Connection":      "keep-alive",
-        },
-        # Some Instagram videos need this
-        "extractor_args": {
-            "instagram": {
-                "include_feeds": ["reels", "posts"],
-            }
+            "User-Agent":      "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Accept-Language": "en-US,en;q=0.9",
         },
     }
 
