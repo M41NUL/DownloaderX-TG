@@ -39,6 +39,12 @@ PLATFORMS = {
     "tiktok":    ["tiktok.com", "vm.tiktok.com"],
 }
 
+MAINTENANCE_TEXT = (
+    "🔧 *Bot is under maintenance!*\n\n"
+    "Bot update is in progress...\n"
+    "Please wait, it will be fixed shortly. 🙏"
+)
+
 # ── Timing (seconds) ──────────────────────────────────────────────────────────
 AUTO_DETECT_DELETE_DELAY = 2      # delete "auto detect success" msg
 VIDEO_DELETE_DELAY        = 1     # delete "processing" msg after video sent
