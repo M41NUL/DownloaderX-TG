@@ -46,67 +46,98 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     context.user_data["waiting_chat_id"] = sent.chat.id
 
 
-async def download_youtube(url: str) -> dict:
-    uid      = uuid.uuid4().hex
-    out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
+def _build_ydl_opts(out_tmpl: str, client: str, has_ffmpeg: bool) -> dict:
+    """প্রতিটা client এর জন্য আলাদা opts তৈরি করে।"""
 
-    has_ffmpeg = shutil.which("ffmpeg") is not None
+    # Client অনুযায়ী User-Agent
+    ua_map = {
+        "web":          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36",
+        "web_embedded": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/134.0.0.0 Safari/537.36",
+        "ios":          "com.google.ios.youtube/19.09.3 (iPhone16,2; U; CPU iOS 17_0 like Mac OS X)",
+        "mweb":         "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+        "tv_embedded":  "Mozilla/5.0 (SMART-TV; Linux; Tizen 5.0) AppleWebKit/537.36 Chrome/79.0.0.0 Safari/537.36",
+    }
 
-    ydl_opts = {
+    opts = {
         "outtmpl":            out_tmpl,
-        # "best" always picks an available format - no more format errors
         "format":             "best",
         "format_sort":        ["res:720", "ext:mp4:m4a"],
         "quiet":              True,
         "no_warnings":        True,
         "noplaylist":         True,
-        "cookiefile":         COOKIES if os.path.exists(COOKIES) else None,
         "nocheckcertificate": True,
+        "cookiefile":         COOKIES if os.path.exists(COOKIES) else None,
 
-        # Android client unlocks maximum formats in 2026
         "extractor_args": {
             "youtube": {
-                "player_client": ["android"],
+                "player_client": [client],
             }
         },
 
         "http_headers": {
-            "User-Agent": (
-                "com.google.android.youtube/19.09.37 "
-                "(Linux; U; Android 11) gzip"
-            ),
+            "User-Agent": ua_map.get(client, ua_map["web"]),
         },
 
         "socket_timeout":   30,
-        "retries":          10,
-        "fragment_retries": 10,
+        "retries":          5,
+        "fragment_retries": 5,
     }
 
     if has_ffmpeg:
-        ydl_opts["merge_output_format"] = "mp4"
+        opts["merge_output_format"] = "mp4"
+
+    return opts
+
+
+async def download_youtube(url: str) -> dict:
+    uid      = uuid.uuid4().hex
+    out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
+    has_ffmpeg = shutil.which("ffmpeg") is not None
+
+    # ✅ Client fallback list — একটা block হলে পরেরটা try করবে
+    clients = ["web", "web_embedded", "ios", "mweb", "tv_embedded"]
 
     loop = asyncio.get_event_loop()
+    info      = None
+    last_err  = None
 
-    def _run():
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            return ydl.extract_info(url, download=True)
+    for client in clients:
+        ydl_opts = _build_ydl_opts(out_tmpl, client, has_ffmpeg)
 
-    try:
-        info = await loop.run_in_executor(None, _run)
-    except yt_dlp.utils.DownloadError as e:
-        err_str = str(e)
-        logger.error(f"yt-dlp DownloadError: {err_str}")
+        def _run(opts=ydl_opts):
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=True)
 
-        if "Sign in" in err_str or "age" in err_str.lower():
-            raise RuntimeError("⛔ This video requires login or is age-restricted.")
-        elif "private" in err_str.lower():
-            raise RuntimeError("🔒 This video is private.")
-        elif "unavailable" in err_str.lower():
-            raise RuntimeError("❌ This video is unavailable in this region.")
+        try:
+            logger.info(f"Trying YouTube client: {client}")
+            info = await loop.run_in_executor(None, _run)
+            logger.info(f"Success with client: {client}")
+            break  # সফল হলে loop থেকে বের হও
+
+        except yt_dlp.utils.DownloadError as e:
+            last_err = str(e)
+            logger.warning(f"Client [{client}] failed: {last_err[:80]}")
+
+            # Fatal error হলে বাকি client try করার দরকার নেই
+            if any(k in last_err for k in ["Private video", "age", "Sign in", "This video is unavailable"]):
+                break
+            continue
+
+    # সব client fail হলে
+    if info is None:
+        if last_err:
+            if "Sign in" in last_err or "age" in last_err.lower():
+                raise RuntimeError("⛔ This video requires login or is age-restricted.")
+            elif "private" in last_err.lower():
+                raise RuntimeError("🔒 This video is private.")
+            elif "unavailable" in last_err.lower():
+                raise RuntimeError("❌ This video is unavailable in this region.")
+            else:
+                raise RuntimeError("❌ YouTube download failed. Please try again later.")
         else:
-            raise RuntimeError(f"YouTube download failed:\n`{err_str}`")
+            raise RuntimeError("❌ Unknown error during download.")
 
-    # Find the final file (skip .part files)
+    # ✅ .part ফাইল বাদ দিয়ে সঠিক ফাইল খোঁজা
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
@@ -116,7 +147,6 @@ async def download_youtube(url: str) -> dict:
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError("Downloaded file not found after yt-dlp run.")
 
-    # Video metadata
     raw_dur  = info.get("duration", 0) or 0
     duration = f"{int(raw_dur) // 60}:{int(raw_dur) % 60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
