@@ -76,6 +76,15 @@ async def auto_detect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
+        # Delete waiting message
+        msg_id  = context.user_data.pop("waiting_msg_id", None)
+        chat_id = context.user_data.pop("waiting_chat_id", None)
+        if msg_id and chat_id:
+            try:
+                await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
+            except Exception:
+                pass
+
         # Clear waiting state BEFORE download so auto-detect won't be suppressed
         # for the next message.
         context.user_data.pop(WAITING_KEY, None)
