@@ -52,52 +52,38 @@ async def download_youtube(url: str) -> dict:
 
     has_ffmpeg = shutil.which("ffmpeg") is not None
 
-    
-    if has_ffmpeg:
-        fmt = (
-            "bestvideo[ext=mp4]+bestaudio[ext=m4a]"
-            "/bestvideo+bestaudio"
-            "/best[ext=mp4]"
-            "/best"
-        )
-    else:
-        fmt = (
-            "best[ext=mp4]"
-            "/best[height<=720][ext=mp4]"
-            "/best[height<=480]"
-            "/best"
-        )
-
     ydl_opts = {
-        "outtmpl":             out_tmpl,
-        "format":              fmt,
-        "merge_output_format": "mp4",
-        "quiet":               True,
-        "no_warnings":         True,
-        "noplaylist":          True,
-        "cookiefile":          COOKIES if os.path.exists(COOKIES) else None,
-        "nocheckcertificate":  True,
+        "outtmpl":            out_tmpl,
+        # "best" always picks an available format - no more format errors
+        "format":             "best",
+        "format_sort":        ["res:720", "ext:mp4:m4a"],
+        "quiet":              True,
+        "no_warnings":        True,
+        "noplaylist":         True,
+        "cookiefile":         COOKIES if os.path.exists(COOKIES) else None,
+        "nocheckcertificate": True,
 
+        # Android client unlocks maximum formats in 2026
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "web"],
+                "player_client": ["android"],
             }
         },
 
         "http_headers": {
             "User-Agent": (
-                "Mozilla/5.0 (Linux; Android 11; Pixel 5) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/134.0.0.0 Mobile Safari/537.36"
+                "com.google.android.youtube/19.09.37 "
+                "(Linux; U; Android 11) gzip"
             ),
         },
 
-        "socket_timeout":    30,
-        "retries":           5,
-        "fragment_retries":  5,
-        "sleep_interval":    1,
-        "max_sleep_interval": 3,
+        "socket_timeout":   30,
+        "retries":          10,
+        "fragment_retries": 10,
     }
+
+    if has_ffmpeg:
+        ydl_opts["merge_output_format"] = "mp4"
 
     loop = asyncio.get_event_loop()
 
@@ -108,10 +94,19 @@ async def download_youtube(url: str) -> dict:
     try:
         info = await loop.run_in_executor(None, _run)
     except yt_dlp.utils.DownloadError as e:
-        logger.error(f"yt-dlp DownloadError: {e}")
-        raise RuntimeError(f"YouTube download failed: {e}")
+        err_str = str(e)
+        logger.error(f"yt-dlp DownloadError: {err_str}")
 
-    
+        if "Sign in" in err_str or "age" in err_str.lower():
+            raise RuntimeError("⛔ This video requires login or is age-restricted.")
+        elif "private" in err_str.lower():
+            raise RuntimeError("🔒 This video is private.")
+        elif "unavailable" in err_str.lower():
+            raise RuntimeError("❌ This video is unavailable in this region.")
+        else:
+            raise RuntimeError(f"YouTube download failed:\n`{err_str}`")
+
+    # Find the final file (skip .part files)
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
@@ -121,6 +116,7 @@ async def download_youtube(url: str) -> dict:
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError("Downloaded file not found after yt-dlp run.")
 
+    # Video metadata
     raw_dur  = info.get("duration", 0) or 0
     duration = f"{int(raw_dur) // 60}:{int(raw_dur) % 60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
