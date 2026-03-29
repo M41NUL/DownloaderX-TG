@@ -55,19 +55,19 @@ async def download_youtube(url: str) -> dict:
     out_tmpl   = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
     has_ffmpeg = shutil.which("ffmpeg") is not None
 
-    # ✅ 1080p চাইবে, না পেলে 720p, তারপর best — কখনো fail করবে না
+    # ✅ ext filter নেই — যেকোনো format নেবে, ffmpeg দিয়ে mp4 এ convert করবে
     if has_ffmpeg:
         fmt = (
-            "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]"
-            "/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]"
+            "bestvideo[height<=1080]+bestaudio"
+            "/bestvideo[height<=720]+bestaudio"
             "/bestvideo+bestaudio"
             "/best"
         )
     else:
+        # ffmpeg নেই — single file নেবে, যা পাওয়া যায়
         fmt = (
-            "best[height<=1080][ext=mp4]"
-            "/best[height<=720][ext=mp4]"
-            "/best[ext=mp4]"
+            "best[height<=1080]"
+            "/best[height<=720]"
             "/best"
         )
 
