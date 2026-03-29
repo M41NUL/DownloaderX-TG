@@ -44,9 +44,19 @@ async def download_youtube(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
+    # Check if ffmpeg is available
+    import shutil
+    has_ffmpeg = shutil.which("ffmpeg") is not None
+
+    if has_ffmpeg:
+        fmt = "bestvideo+bestaudio/best"
+    else:
+        # No ffmpeg — use single file format only
+        fmt = "best[ext=mp4]/best"
+
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo+bestaudio/best",
+        "format":              fmt,
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
@@ -56,6 +66,7 @@ async def download_youtube(url: str) -> dict:
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "web"],
+                "skip": ["dash", "hls"],
             }
         },
         "http_headers": {
