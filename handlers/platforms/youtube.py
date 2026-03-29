@@ -46,24 +46,21 @@ async def download_youtube(url: str) -> dict:
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
-        "format":              "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best",
+        "format":              "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
         "merge_output_format": "mp4",
         "quiet":               True,
         "no_warnings":         True,
         "noplaylist":          True,
         "cookiefile":          COOKIES,
-        # Bypass bot detection
+        "nocheckcertificate":  True,
         "extractor_args": {
             "youtube": {
-                "player_client": ["ios", "web"],
+                "player_client": ["android", "ios", "web"],
             }
         },
         "http_headers": {
-            "User-Agent": (
-                "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X)"
-            ),
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
         },
-        # Avoid 403 errors
         "sleep_interval":      1,
         "max_sleep_interval":  3,
     }
