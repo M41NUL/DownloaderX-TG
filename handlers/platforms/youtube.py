@@ -49,7 +49,8 @@ async def download_youtube(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
-    fmt = "best[ext=mp4]/best"
+    # 🔥 FFMPEG-FREE SAFE FORMAT
+    fmt = "best[ext=mp4][acodec!=none][vcodec!=none]/best"
 
     ydl_opts = {
         "outtmpl":            out_tmpl,
@@ -62,6 +63,9 @@ async def download_youtube(url: str) -> dict:
         "ignoreerrors":       False,
         "retries":            10,
         "fragment_retries":   10,
+
+        # 🔥 IMPORTANT: prevent DASH (separate streams)
+        "merge_output_format": None,
     }
 
     loop = asyncio.get_event_loop()
@@ -75,15 +79,17 @@ async def download_youtube(url: str) -> dict:
     except yt_dlp.utils.DownloadError as e:
         err = str(e)
         logger.error(f"[YT] DownloadError: {err}")
+
         if "private" in err.lower():
             raise RuntimeError("🔒 This video is private.")
-        elif "age" in err.lower() or "Sign in" in err:
+        elif "age" in err.lower() or "sign in" in err.lower():
             raise RuntimeError("⛔ Age-restricted. Login required.")
         elif "unavailable" in err.lower():
             raise RuntimeError("❌ Video unavailable in this region.")
         else:
             raise RuntimeError(f"❌ Download failed!\n\n`{err[:200]}`")
 
+    # 🔍 find downloaded file
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
@@ -94,7 +100,7 @@ async def download_youtube(url: str) -> dict:
         raise FileNotFoundError("Downloaded file not found.")
 
     raw_dur  = info.get("duration", 0) or 0
-    duration = f"{int(raw_dur) // 60}:{int(raw_dur) % 60:02d}"
+    duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
 
     increment_stat("youtube")
