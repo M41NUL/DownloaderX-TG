@@ -34,14 +34,14 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
     context.user_data[WAITING_KEY] = "youtube"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
-    
+
     sent = await update.message.reply_text(
         "▶️ *YouTube Downloader*\n\n"
         "Please send me the YouTube video or Shorts link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
-    
+
     context.user_data["waiting_msg_id"]  = sent.message_id
     context.user_data["waiting_chat_id"] = sent.chat.id
 
@@ -50,39 +50,53 @@ async def download_youtube(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
-
     has_ffmpeg = shutil.which("ffmpeg") is not None
 
+    
     if has_ffmpeg:
-        fmt = "bv*+ba/best"                    # best video + best audio (flexible)
+        fmt = (
+            "bestvideo[ext=mp4]+bestaudio[ext=m4a]"
+            "/bestvideo+bestaudio"
+            "/best[ext=mp4]"
+            "/best"
+        )
     else:
-        fmt = "best[ext=mp4]/b[ext=mp4]/best"  # ffmpeg ছাড়া single file fallback
+        fmt = (
+            "best[ext=mp4]"
+            "/best[height<=720][ext=mp4]"
+            "/best[height<=480]"
+            "/best"
+        )
 
     ydl_opts = {
         "outtmpl":             out_tmpl,
         "format":              fmt,
         "merge_output_format": "mp4",
         "quiet":               True,
-        "no_warnings":         False,          # warnings দেখতে চাইলে False রাখো (ডিবাগ-এ সাহায্য করে)
+        "no_warnings":         True,
         "noplaylist":          True,
         "cookiefile":          COOKIES if os.path.exists(COOKIES) else None,
         "nocheckcertificate":  True,
-        
-        
+
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "ios", "web", "web_embedded", "web_safari"],
-                
+                "player_client": ["android", "ios", "web"],
             }
         },
-        
+
         "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                          "(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
+            "User-Agent": (
+                "Mozilla/5.0 (Linux; Android 11; Pixel 5) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/134.0.0.0 Mobile Safari/537.36"
+            ),
         },
-        
-        "sleep_interval":      2,
-        "max_sleep_interval":  5,
+
+        "socket_timeout":    30,
+        "retries":           5,
+        "fragment_retries":  5,
+        "sleep_interval":    1,
+        "max_sleep_interval": 3,
     }
 
     loop = asyncio.get_event_loop()
@@ -91,21 +105,24 @@ async def download_youtube(url: str) -> dict:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             return ydl.extract_info(url, download=True)
 
-    info = await loop.run_in_executor(None, _run)
+    try:
+        info = await loop.run_in_executor(None, _run)
+    except yt_dlp.utils.DownloadError as e:
+        logger.error(f"yt-dlp DownloadError: {e}")
+        raise RuntimeError(f"YouTube download failed: {e}")
 
     
     file_path = None
-    for f in os.listdir(TMP_DIR):
-        if f.startswith(f"yt_{uid}"):
+    for f in sorted(os.listdir(TMP_DIR)):
+        if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
             file_path = os.path.join(TMP_DIR, f)
             break
 
     if not file_path or not os.path.exists(file_path):
-        raise FileNotFoundError("Downloaded file not found.")
+        raise FileNotFoundError("Downloaded file not found after yt-dlp run.")
 
-    
-    raw_dur  = info.get("duration", 0)
-    duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
+    raw_dur  = info.get("duration", 0) or 0
+    duration = f"{int(raw_dur) // 60}:{int(raw_dur) % 60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
 
     increment_stat("youtube")
