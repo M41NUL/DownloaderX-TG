@@ -11,7 +11,6 @@ import asyncio
 import logging
 import os
 import uuid
-import shutil
 import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -51,43 +50,31 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 # ── Core download ─────────────────────────────────────────────────────────────
 
 async def download_youtube(url: str) -> dict:
-    uid        = uuid.uuid4().hex
-    out_tmpl   = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
-    has_ffmpeg = shutil.which("ffmpeg") is not None
+    uid      = uuid.uuid4().hex
+    out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
 
-    # ✅ ext filter নেই — যেকোনো format নেবে, ffmpeg দিয়ে mp4 এ convert করবে
-    if has_ffmpeg:
-        fmt = (
-            "bestvideo[height<=1080]+bestaudio"
-            "/bestvideo[height<=720]+bestaudio"
-            "/bestvideo+bestaudio"
-            "/best"
-        )
-    else:
-        # ffmpeg নেই — single file নেবে, যা পাওয়া যায়
-        fmt = (
-            "best[height<=1080]"
-            "/best[height<=720]"
-            "/best"
-        )
+    
+    fmt = (
+        "best[height<=720][ext=mp4]"
+        "/best[height<=480][ext=mp4]"
+        "/best[height<=360][ext=mp4]"
+        "/best[ext=mp4]"
+        "/best"
+    )
 
     ydl_opts = {
-        "outtmpl":                       out_tmpl,
-        "format":                        fmt,
-        "merge_output_format":           "mp4" if has_ffmpeg else None,
-        "quiet":                         True,
-        "no_warnings":                   True,
-        "noplaylist":                    True,
-        "nocheckcertificate":            True,
-        "cookiefile":                    COOKIES if os.path.exists(COOKIES) else None,
-        "ignoreerrors":                  False,
-        "retries":                       10,
-        "fragment_retries":              10,
-        "concurrent_fragment_downloads": 4,
+        "outtmpl":            out_tmpl,
+        "format":             fmt,
+        "quiet":              True,
+        "no_warnings":        True,
+        "noplaylist":         True,
+        "nocheckcertificate": True,
+        "cookiefile":         COOKIES if os.path.exists(COOKIES) else None,
+        "ignoreerrors":       False,
+        "retries":            10,
+        "fragment_retries":   10,
+        
     }
-
-    if has_ffmpeg:
-        ydl_opts["postprocessor_args"] = ["-movflags", "faststart"]
 
     loop = asyncio.get_event_loop()
 
@@ -109,7 +96,7 @@ async def download_youtube(url: str) -> dict:
         else:
             raise RuntimeError(f"❌ Download failed!\n\n`{err[:200]}`")
 
-    # ── ফাইল খোঁজা (.part বাদ) ───────────────────────────────────────────────
+    
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
