@@ -15,7 +15,8 @@ import uuid
 import yt_dlp
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from handlers.admin import increment_stat
+from handlers.admin import increment_stat, is_maintenance
+from config import MAINTENANCE_TEXT
 
 logger = logging.getLogger("DownloaderX.tiktok")
 WAITING_KEY = "waiting_platform"
@@ -25,6 +26,9 @@ os.makedirs(TMP_DIR, exist_ok=True)
 
 
 async def tt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if is_maintenance():
+        await update.message.reply_text(MAINTENANCE_TEXT, parse_mode="Markdown")
+        return
     context.user_data[WAITING_KEY] = "tiktok"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
     sent = await update.message.reply_text(
@@ -66,7 +70,6 @@ async def download_tiktok(url: str) -> dict:
     try:
         info = await loop.run_in_executor(None, _run)
     except Exception:
-        # Fallback without format filter
         ydl_opts["format"] = "best"
         def _fallback():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
