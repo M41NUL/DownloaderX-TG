@@ -64,7 +64,6 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # ── Home button ───────────────────────────────────────────────────────────
     if data == "dl_home":
         from handlers.logic import handle_start
-        # Fake a message update so handle_start can reply
         await query.message.delete()
         await handle_start(update, context)
         return
@@ -75,11 +74,13 @@ async def download_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         context.user_data[WAITING_KEY] = platform
 
         platform_label = PLATFORM_EMOJI.get(platform, platform.title())
-        await query.message.reply_text(
+        sent = await query.message.reply_text(
             f"🔗 *{platform_label} Download*\n\n"
             f"Please send me the video link now.",
             parse_mode="Markdown",
         )
+        context.user_data["waiting_msg_id"]  = sent.message_id
+        context.user_data["waiting_chat_id"] = sent.chat.id
         return
 
 
@@ -98,7 +99,7 @@ async def process_download(
     3. Delete the processing message.
     4. Send the video with a rich caption.
     """
-    chat_id  = update.effective_chat.id
+    chat_id        = update.effective_chat.id
     platform_label = PLATFORM_EMOJI.get(platform, platform.title())
 
     # ── Step 1 : Send processing bar ─────────────────────────────────────────
@@ -127,12 +128,6 @@ async def process_download(
 
     try:
         result = await downloader(url)
-        # result = {
-        #   "file_path": str,
-        #   "title": str,
-        #   "duration": str,   e.g. "3:45"
-        #   "size": str,       e.g. "12.4 MB"
-        # }
     except Exception as e:
         logger.error(f"Download error [{platform}]: {e}")
         await proc_msg.edit_text(
@@ -152,8 +147,8 @@ async def process_download(
     title = result.get('title', 'N/A')
     caption = (
         f"✅ *Download Complete!*\n\n"
-        f"🎬 *Title* \n"
-        f"`{title}`\n"
+        f"🎬 *Title*\n"
+        f"`{title}`\n\n"
         f"⏱️ *Duration  :* {result.get('duration', 'N/A')}\n"
         f"📦 *Size      :* {result.get('size', 'N/A')}\n"
         f"📡 *Platform  :* {platform_label}\n\n"
