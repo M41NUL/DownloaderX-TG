@@ -19,21 +19,23 @@ from handlers.admin import increment_stat
 
 logger = logging.getLogger("DownloaderX.facebook")
 WAITING_KEY = "waiting_platform"
-TMP_DIR = "downloads"
-COOKIES = "cookies.txt"
+TMP_DIR     = "downloads"
+COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
 
 async def fb_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data[WAITING_KEY] = "facebook"
     keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="dl_home")]]
-    await update.message.reply_text(
+    sent = await update.message.reply_text(
         "📘 *Facebook Downloader*\n\n"
         "Supported: Videos, Reels, Watch\n\n"
         "Please send me the Facebook link:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
+    context.user_data["waiting_msg_id"]  = sent.message_id
+    context.user_data["waiting_chat_id"] = sent.chat.id
 
 
 async def download_facebook(url: str) -> dict:
@@ -49,11 +51,7 @@ async def download_facebook(url: str) -> dict:
         "noplaylist":          True,
         "cookiefile":          COOKIES,
         "http_headers": {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
+            "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
         },
     }
