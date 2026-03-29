@@ -53,7 +53,7 @@ def _extract_url(text: str) -> str | None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-async def auto_detect_handler(update, context): ContextTypes.DEFAULT_TYPE) -> None:
+async def auto_detect_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Handles every plain-text message that isn't a command.
 
@@ -66,9 +66,10 @@ async def auto_detect_handler(update, context): ContextTypes.DEFAULT_TYPE) -> No
     text = (update.message.text or "").strip()
     uid  = update.effective_user.id
 
-		if is_maintenance():
+    if is_maintenance():
         await update.message.reply_text(MAINTENANCE_TEXT, parse_mode="Markdown")
         return
+
     waiting_platform: str | None = context.user_data.get(WAITING_KEY)
 
     # ── CASE A: button / command mode ─────────────────────────────────────────
