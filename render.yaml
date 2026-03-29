@@ -10,4 +10,6 @@ services:
         sync: false
       - key: OWNER_ID
         sync: false
+      - key: NIXPACKS_PKGS
+        value: ffmpeg python311
     autoDeploy: true
