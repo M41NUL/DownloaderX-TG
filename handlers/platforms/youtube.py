@@ -81,15 +81,17 @@ async def download_youtube(url: str) -> dict:
     for i, fmt in enumerate(attempts):
         ua = USER_AGENTS[i % len(USER_AGENTS)]
         ydl_opts = {
+        ydl_opts = {
             "outtmpl":            out_tmpl,
             "format":             fmt,
+            "merge_output_format":"mp4",     
             "quiet":              True,
             "no_warnings":        True,
             "noplaylist":         True,
             "nocheckcertificate": True,
             "ignoreerrors":       False,
             "retries":            3,
-            "no_cache_dir":       True,      # Cache Error ফিক্স করার জন্য
+            "no_cache_dir":       True,
             "http_headers": {
                 "User-Agent":      ua,
                 "Accept-Language": "en-US,en;q=0.9",
