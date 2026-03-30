@@ -23,7 +23,7 @@ TMP_DIR     = "downloads"
 COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
-USER_AGENTS = [
+USER_AGENTS =[
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
@@ -31,7 +31,7 @@ USER_AGENTS = [
 
 
 def _get_cookie_file():
-    paths = [
+    paths =[
         COOKIES,
         "/opt/render/project/src/cookies.txt",
         os.path.join(os.path.dirname(__file__), "..", "..", "cookies.txt"),
@@ -67,21 +67,11 @@ async def download_youtube(url: str) -> dict:
     loop        = asyncio.get_event_loop()
     cookie_file = _get_cookie_file()
 
-    # Format IDs that don't need FFmpeg (pre-merged):
-    # 22  = 720p mp4 (video+audio)
-    # 18  = 360p mp4 (video+audio)
-    # 59  = 480p mp4 (video+audio)
-    # 135 = 480p video only (needs ffmpeg) — skip
-    # best[ext=mp4][vcodec^=avc1] = H.264 mp4 with audio
     attempts = [
-        "22",
-        "59",
-        "18",
-        "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/22/18",
-        "best[ext=mp4][vcodec^=avc1]",
-        "best[ext=mp4]",
-        "best",
-        "worst",
+        "best[height<=720]", 
+        "22",                 # 720p mp4 (video+audio)
+        "18",                 # 360p mp4 (video+audio)
+        "best"                # Fallback to the best single file
     ]
 
     info       = None
