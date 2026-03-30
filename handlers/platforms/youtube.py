@@ -67,11 +67,12 @@ async def download_youtube(url: str) -> dict:
     loop        = asyncio.get_event_loop()
     cookie_file = _get_cookie_file()
 
+    # height<=720 রিমুভ করা হয়েছে যাতে Shorts (যার height 1280) ব্লক না হয়।
+    # "b[ext=mp4]" মানে হলো: Best pre-merged MP4 (অডিও-ভিডিও একসাথে থাকা ফাইল), এখানে কোনো FFmpeg লাগবে না।
     attempts = [
-        "best[height<=720]", 
-        "22",                 # 720p mp4 (video+audio)
-        "18",                 # 360p mp4 (video+audio)
-        "best"                # Fallback to the best single file
+        "b[ext=mp4]/b",                      # প্রথম চেষ্টা: অডিও-ভিডিও একসাথে থাকা সেরা সিঙ্গেল ফাইল (খুব ফাস্ট হবে)
+        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best", # যদি ইউটিউব জোর করে আলাদা ফাইল দেয় (খুব রেয়ার), তবেই এটা ট্রাই করবে
+        "18"                                 # ব্যাকআপ 360p সিঙ্গেল ফাইল
     ]
 
     info       = None
@@ -88,6 +89,7 @@ async def download_youtube(url: str) -> dict:
             "nocheckcertificate": True,
             "ignoreerrors":       False,
             "retries":            3,
+            "no_cache_dir":       True,      # Cache Error ফিক্স করার জন্য
             "http_headers": {
                 "User-Agent":      ua,
                 "Accept-Language": "en-US,en;q=0.9",
@@ -99,6 +101,8 @@ async def download_youtube(url: str) -> dict:
 
         def _run(opts=ydl_opts):
             with yt_dlp.YoutubeDL(opts) as ydl:
+                # অনেক সময় ক্যাশের কারণে ফরম্যাট এরর আসে, তাই ক্যাশ ক্লিয়ার করে নিচ্ছি
+                ydl.cache.remove()
                 return ydl.extract_info(url, download=True)
 
         try:
