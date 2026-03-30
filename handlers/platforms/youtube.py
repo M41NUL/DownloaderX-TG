@@ -22,6 +22,13 @@ WAITING_KEY = "waiting_platform"
 TMP_DIR     = "downloads"
 os.makedirs(TMP_DIR, exist_ok=True)
 
+COOKIES = "cookies.txt"
+
+def get_cookie_file():
+    if os.path.exists(COOKIES):
+        return COOKIES
+    return None
+
 
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_maintenance():
@@ -44,19 +51,30 @@ async def download_youtube(url: str) -> dict:
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
     loop     = asyncio.get_event_loop()
 
-    # 🔥 ULTRA SAFE SETTINGS
     ydl_opts = {
         "outtmpl": out_tmpl,
-
-        # 🔥 ALWAYS WORKING FORMAT
-        "format": "best",
-
+        "format": "best[ext=mp4]/best",
+        "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
         "retries": 10,
         "fragment_retries": 10,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0",
+        },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"]
+            }
+        },
+        "geo_bypass": True,
+        "nocheckcertificate": True,
     }
+
+    cookie_file = get_cookie_file()
+    if cookie_file:
+        ydl_opts["cookiefile"] = cookie_file
 
     def _run():
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -68,7 +86,6 @@ async def download_youtube(url: str) -> dict:
     except Exception as e:
         raise RuntimeError(f"❌ Download failed!\n\n`{str(e)[:300]}`")
 
-    # 📂 Find file
     file_path = None
     for f in os.listdir(TMP_DIR):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
@@ -78,7 +95,6 @@ async def download_youtube(url: str) -> dict:
     if not file_path:
         raise FileNotFoundError("Downloaded file not found.")
 
-    # 📊 Info
     raw_dur  = info.get("duration", 0) or 0
     duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
