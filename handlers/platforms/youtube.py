@@ -23,13 +23,10 @@ TMP_DIR     = "downloads"
 COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
-# Multiple User-Agents to rotate
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
 ]
 
 
@@ -70,26 +67,28 @@ async def download_youtube(url: str) -> dict:
     loop        = asyncio.get_event_loop()
     cookie_file = _get_cookie_file()
 
-    # Attempts: (format, use_po_token, use_cookies, user_agent_index)
+    # Format IDs that don't need FFmpeg (pre-merged):
+    # 22  = 720p mp4 (video+audio)
+    # 18  = 360p mp4 (video+audio)
+    # 59  = 480p mp4 (video+audio)
+    # 135 = 480p video only (needs ffmpeg) — skip
+    # best[ext=mp4][vcodec^=avc1] = H.264 mp4 with audio
     attempts = [
-        ("best[height<=720]", True,  cookie_file, 0),
-        ("best[height<=720]", True,  cookie_file, 1),
-        ("best[height<=480]", True,  cookie_file, 2),
-        ("best",              True,  cookie_file, 3),
-        ("best[height<=720]", False, cookie_file, 0),
-        ("best",              False, cookie_file, 1),
-        ("best[height<=720]", True,  None,        0),
-        ("best[height<=720]", True,  None,        4),
-        ("best",              True,  None,        2),
-        ("best[height<=480]", False, None,        1),
-        ("best",              False, None,        3),
-        ("worst",             False, None,        0),
+        "22",
+        "59",
+        "18",
+        "bestvideo[ext=mp4][vcodec^=avc1]+bestaudio[ext=m4a]/22/18",
+        "best[ext=mp4][vcodec^=avc1]",
+        "best[ext=mp4]",
+        "best",
+        "worst",
     ]
 
     info       = None
     last_error = None
 
-    for fmt, use_po, cookies, ua_idx in attempts:
+    for i, fmt in enumerate(attempts):
+        ua = USER_AGENTS[i % len(USER_AGENTS)]
         ydl_opts = {
             "outtmpl":            out_tmpl,
             "format":             fmt,
@@ -100,22 +99,13 @@ async def download_youtube(url: str) -> dict:
             "ignoreerrors":       False,
             "retries":            3,
             "http_headers": {
-                "User-Agent":      USER_AGENTS[ua_idx],
+                "User-Agent":      ua,
                 "Accept-Language": "en-US,en;q=0.9",
-                "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             },
         }
 
-        if cookies:
-            ydl_opts["cookiefile"] = cookies
-
-        if use_po:
-            ydl_opts["extractor_args"] = {
-                "youtube": {
-                    "player_client": ["web"],
-                    "po_token":      ["web+auto"],
-                }
-            }
+        if cookie_file:
+            ydl_opts["cookiefile"] = cookie_file
 
         def _run(opts=ydl_opts):
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -123,11 +113,11 @@ async def download_youtube(url: str) -> dict:
 
         try:
             info = await loop.run_in_executor(None, _run)
-            logger.info(f"[YT] ✅ fmt={fmt} po={use_po} cookies={'yes' if cookies else 'no'} ua={ua_idx}")
+            logger.info(f"[YT] ✅ fmt={fmt}")
             break
         except Exception as e:
             last_error = str(e)
-            logger.warning(f"[YT] ❌ fmt={fmt} ua={ua_idx}: {str(e)[:100]}")
+            logger.warning(f"[YT] ❌ fmt={fmt}: {str(e)[:100]}")
             continue
 
     if info is None:
