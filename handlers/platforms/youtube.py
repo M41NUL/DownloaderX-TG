@@ -81,10 +81,9 @@ async def download_youtube(url: str) -> dict:
     for i, fmt in enumerate(attempts):
         ua = USER_AGENTS[i % len(USER_AGENTS)]
         ydl_opts = {
-        ydl_opts = {
             "outtmpl":            out_tmpl,
             "format":             fmt,
-            "merge_output_format":"mp4",     
+            "merge_output_format":"mp4",     # 👈 এই লাইনটি অ্যাড করে দিন (টেলিগ্রামের জন্য বেস্ট)
             "quiet":              True,
             "no_warnings":        True,
             "noplaylist":         True,
@@ -97,7 +96,6 @@ async def download_youtube(url: str) -> dict:
                 "Accept-Language": "en-US,en;q=0.9",
             },
         }
-
         if cookie_file:
             ydl_opts["cookiefile"] = cookie_file
 
