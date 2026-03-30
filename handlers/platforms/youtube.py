@@ -60,19 +60,25 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     context.user_data["waiting_msg_id"]  = sent.message_id
     context.user_data["waiting_chat_id"] = sent.chat.id
 
-
 async def download_youtube(url: str) -> dict:
     uid         = uuid.uuid4().hex
     out_tmpl    = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
     loop        = asyncio.get_event_loop()
     cookie_file = _get_cookie_file()
 
-    # height<=720 রিমুভ করা হয়েছে যাতে Shorts (যার height 1280) ব্লক না হয়।
-    # "b[ext=mp4]" মানে হলো: Best pre-merged MP4 (অডিও-ভিডিও একসাথে থাকা ফাইল), এখানে কোনো FFmpeg লাগবে না।
+    # 🔥 Smart format system (BEST → SAFE → FALLBACK)
     attempts = [
-        "b[ext=mp4]/b",                      # প্রথম চেষ্টা: অডিও-ভিডিও একসাথে থাকা সেরা সিঙ্গেল ফাইল (খুব ফাস্ট হবে)
-        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best", # যদি ইউটিউব জোর করে আলাদা ফাইল দেয় (খুব রেয়ার), তবেই এটা ট্রাই করবে
-        "18"                                 # ব্যাকআপ 360p সিঙ্গেল ফাইল
+        # ✅ HD with merge (FFmpeg লাগবে)
+        "bv*[ext=mp4]+ba[ext=m4a]/bestaudio+bv/best",
+
+        # ✅ Best single file (no FFmpeg)
+        "best[ext=mp4]/best",
+
+        # ✅ Very safe fallback
+        "best",
+
+        # ✅ Ultra fallback (360p)
+        "18"
     ]
 
     info       = None
@@ -80,38 +86,45 @@ async def download_youtube(url: str) -> dict:
 
     for i, fmt in enumerate(attempts):
         ua = USER_AGENTS[i % len(USER_AGENTS)]
+
         ydl_opts = {
-            "outtmpl":            out_tmpl,
-            "format":             fmt,
-            "merge_output_format":"mp4",     # 👈 এই লাইনটি অ্যাড করে দিন (টেলিগ্রামের জন্য বেস্ট)
-            "quiet":              True,
-            "no_warnings":        True,
-            "noplaylist":         True,
+            "outtmpl": out_tmpl,
+            "format": fmt,
+            "merge_output_format": "mp4",   # Telegram friendly
+            "quiet": True,
+            "no_warnings": True,
+            "noplaylist": True,
             "nocheckcertificate": True,
-            "ignoreerrors":       False,
-            "retries":            3,
-            "no_cache_dir":       True,
+            "ignoreerrors": False,
+            "retries": 5,
+            "fragment_retries": 5,
+            "no_cache_dir": True,
+
             "http_headers": {
-                "User-Agent":      ua,
+                "User-Agent": ua,
                 "Accept-Language": "en-US,en;q=0.9",
             },
         }
+
         if cookie_file:
             ydl_opts["cookiefile"] = cookie_file
 
-        def _run(opts=ydl_opts):
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                # অনেক সময় ক্যাশের কারণে ফরম্যাট এরর আসে, তাই ক্যাশ ক্লিয়ার করে নিচ্ছি
-                ydl.cache.remove()
+        def _run():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                try:
+                    ydl.cache.remove()
+                except:
+                    pass
                 return ydl.extract_info(url, download=True)
 
         try:
             info = await loop.run_in_executor(None, _run)
-            logger.info(f"[YT] ✅ fmt={fmt}")
+            logger.info(f"[YT] ✅ SUCCESS format={fmt}")
             break
+
         except Exception as e:
             last_error = str(e)
-            logger.warning(f"[YT] ❌ fmt={fmt}: {str(e)[:100]}")
+            logger.warning(f"[YT] ❌ FAIL format={fmt}: {last_error[:120]}")
             continue
 
     if info is None:
@@ -119,15 +132,17 @@ async def download_youtube(url: str) -> dict:
             f"❌ Download failed!\n\n`{last_error[:300] if last_error else 'Unknown error'}`"
         )
 
+    # 🔍 Find file
     file_path = None
-    for f in sorted(os.listdir(TMP_DIR)):
+    for f in os.listdir(TMP_DIR):
         if f.startswith(f"yt_{uid}") and not f.endswith(".part"):
             file_path = os.path.join(TMP_DIR, f)
             break
 
-    if not file_path or not os.path.exists(file_path):
+    if not file_path:
         raise FileNotFoundError("Downloaded file not found.")
 
+    # 📊 Info
     raw_dur  = info.get("duration", 0) or 0
     duration = f"{int(raw_dur)//60}:{int(raw_dur)%60:02d}"
     size_mb  = os.path.getsize(file_path) / (1024 * 1024)
@@ -136,7 +151,7 @@ async def download_youtube(url: str) -> dict:
 
     return {
         "file_path": file_path,
-        "title":     info.get("title", "YouTube Video"),
-        "duration":  duration,
-        "size":      f"{size_mb:.1f} MB",
+        "title": info.get("title", "YouTube Video"),
+        "duration": duration,
+        "size": f"{size_mb:.1f} MB",
     }
