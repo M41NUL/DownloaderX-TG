@@ -53,19 +53,19 @@ async def download_youtube(url: str) -> dict:
 
     ydl_opts = {
         "outtmpl": out_tmpl,
-        "format": "best[ext=mp4]/best",
+        "format": "bestvideo+bestaudio/best",
         "merge_output_format": "mp4",
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "retries": 10,
-        "fragment_retries": 10,
+        "retries": 15,
+        "fragment_retries": 15,
         "http_headers": {
-            "User-Agent": "Mozilla/5.0",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
         },
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web"]
+                "player_client": ["android", "web", "ios", "web_creator"]
             }
         },
         "geo_bypass": True,
@@ -84,7 +84,7 @@ async def download_youtube(url: str) -> dict:
         info = await loop.run_in_executor(None, _run)
 
     except Exception as e:
-        raise RuntimeError(f"❌ Download failed!\n\n`{str(e)[:300]}`")
+        raise RuntimeError(f"❌ Download failed!\n\n`{str(e)[:400]}`")
 
     file_path = None
     for f in os.listdir(TMP_DIR):
