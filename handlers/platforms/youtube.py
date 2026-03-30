@@ -23,6 +23,30 @@ TMP_DIR     = "downloads"
 COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
+# Multiple User-Agents to rotate
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+]
+
+
+def _get_cookie_file():
+    paths = [
+        COOKIES,
+        "/opt/render/project/src/cookies.txt",
+        os.path.join(os.path.dirname(__file__), "..", "..", "cookies.txt"),
+    ]
+    for p in paths:
+        p = os.path.abspath(p)
+        if os.path.exists(p):
+            logger.info(f"[YT] Cookies found: {p}")
+            return p
+    logger.warning("[YT] No cookies.txt found")
+    return None
+
 
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_maintenance():
@@ -41,25 +65,31 @@ async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 
 
 async def download_youtube(url: str) -> dict:
-    uid      = uuid.uuid4().hex
-    out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
-    loop     = asyncio.get_event_loop()
+    uid         = uuid.uuid4().hex
+    out_tmpl    = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
+    loop        = asyncio.get_event_loop()
+    cookie_file = _get_cookie_file()
 
-    # Each attempt: (format, use_cookies)
+    # Attempts: (format, use_po_token, use_cookies, user_agent_index)
     attempts = [
-        ("best[height<=720]", True),
-        ("best[height<=480]", True),
-        ("best[height<=360]", True),
-        ("best",              True),
-        ("best[height<=720]", False),
-        ("best",              False),
-        ("worst",             False),
+        ("best[height<=720]", True,  cookie_file, 0),
+        ("best[height<=720]", True,  cookie_file, 1),
+        ("best[height<=480]", True,  cookie_file, 2),
+        ("best",              True,  cookie_file, 3),
+        ("best[height<=720]", False, cookie_file, 0),
+        ("best",              False, cookie_file, 1),
+        ("best[height<=720]", True,  None,        0),
+        ("best[height<=720]", True,  None,        4),
+        ("best",              True,  None,        2),
+        ("best[height<=480]", False, None,        1),
+        ("best",              False, None,        3),
+        ("worst",             False, None,        0),
     ]
 
-    info = None
+    info       = None
     last_error = None
 
-    for fmt, use_cookies in attempts:
+    for fmt, use_po, cookies, ua_idx in attempts:
         ydl_opts = {
             "outtmpl":            out_tmpl,
             "format":             fmt,
@@ -69,10 +99,23 @@ async def download_youtube(url: str) -> dict:
             "nocheckcertificate": True,
             "ignoreerrors":       False,
             "retries":            3,
+            "http_headers": {
+                "User-Agent":      USER_AGENTS[ua_idx],
+                "Accept-Language": "en-US,en;q=0.9",
+                "Accept":          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            },
         }
 
-        if use_cookies and os.path.exists(COOKIES):
-            ydl_opts["cookiefile"] = COOKIES
+        if cookies:
+            ydl_opts["cookiefile"] = cookies
+
+        if use_po:
+            ydl_opts["extractor_args"] = {
+                "youtube": {
+                    "player_client": ["web"],
+                    "po_token":      ["web+auto"],
+                }
+            }
 
         def _run(opts=ydl_opts):
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -80,15 +123,17 @@ async def download_youtube(url: str) -> dict:
 
         try:
             info = await loop.run_in_executor(None, _run)
-            logger.info(f"[YT] Success → format={fmt}, cookies={use_cookies}")
+            logger.info(f"[YT] ✅ fmt={fmt} po={use_po} cookies={'yes' if cookies else 'no'} ua={ua_idx}")
             break
         except Exception as e:
             last_error = str(e)
-            logger.warning(f"[YT] Failed → format={fmt}, cookies={use_cookies}: {e}")
+            logger.warning(f"[YT] ❌ fmt={fmt} ua={ua_idx}: {str(e)[:100]}")
             continue
 
     if info is None:
-        raise RuntimeError(f"❌ Download failed!\n\n`{last_error[:300] if last_error else 'Unknown error'}`")
+        raise RuntimeError(
+            f"❌ Download failed!\n\n`{last_error[:300] if last_error else 'Unknown error'}`"
+        )
 
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
