@@ -23,17 +23,6 @@ TMP_DIR     = "downloads"
 COOKIES     = "cookies.txt"
 os.makedirs(TMP_DIR, exist_ok=True)
 
-# Format fallback list (no FFmpeg needed — single file formats)
-FORMAT_LIST = [
-    "best[height<=1080][ext=mp4]",
-    "best[height<=720][ext=mp4]",
-    "best[height<=480][ext=mp4]",
-    "best[ext=mp4]",
-    "best[height<=1080]",
-    "best[height<=720]",
-    "best",
-]
-
 
 async def yt_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if is_maintenance():
@@ -55,9 +44,22 @@ async def download_youtube(url: str) -> dict:
     uid      = uuid.uuid4().hex
     out_tmpl = os.path.join(TMP_DIR, f"yt_{uid}.%(ext)s")
     loop     = asyncio.get_event_loop()
-    info     = None
 
-    for fmt in FORMAT_LIST:
+    # Each attempt: (format, use_cookies)
+    attempts = [
+        ("best[height<=720]", True),
+        ("best[height<=480]", True),
+        ("best[height<=360]", True),
+        ("best",              True),
+        ("best[height<=720]", False),
+        ("best",              False),
+        ("worst",             False),
+    ]
+
+    info = None
+    last_error = None
+
+    for fmt, use_cookies in attempts:
         ydl_opts = {
             "outtmpl":            out_tmpl,
             "format":             fmt,
@@ -66,18 +68,11 @@ async def download_youtube(url: str) -> dict:
             "noplaylist":         True,
             "nocheckcertificate": True,
             "ignoreerrors":       False,
-            "retries":            5,
-            "fragment_retries":   5,
-            "cookiefile":         COOKIES if os.path.exists(COOKIES) else None,
-            "extractor_args": {
-                "youtube": {
-                    "player_client": ["android", "ios", "web"],
-                }
-            },
-            "http_headers": {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            },
+            "retries":            3,
         }
+
+        if use_cookies and os.path.exists(COOKIES):
+            ydl_opts["cookiefile"] = COOKIES
 
         def _run(opts=ydl_opts):
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -85,14 +80,15 @@ async def download_youtube(url: str) -> dict:
 
         try:
             info = await loop.run_in_executor(None, _run)
-            logger.info(f"[YT] Success with format: {fmt}")
+            logger.info(f"[YT] Success → format={fmt}, cookies={use_cookies}")
             break
         except Exception as e:
-            logger.warning(f"[YT] Format '{fmt}' failed: {e}")
+            last_error = str(e)
+            logger.warning(f"[YT] Failed → format={fmt}, cookies={use_cookies}: {e}")
             continue
 
     if info is None:
-        raise RuntimeError("❌ All formats failed. Please try again later.")
+        raise RuntimeError(f"❌ Download failed!\n\n`{last_error[:300] if last_error else 'Unknown error'}`")
 
     file_path = None
     for f in sorted(os.listdir(TMP_DIR)):
